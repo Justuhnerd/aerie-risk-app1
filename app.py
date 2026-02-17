@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
@@ -386,3 +386,4 @@ elif app_mode == "🤖 AI Scenario Generator":
                 # You can extend this by asking the AI to output CSV and then parsing.
             except Exception as e:
                 st.error(f"Error calling API: {e}")
+
