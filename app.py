@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
@@ -6,6 +6,8 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import io
+import requests
+import json
 
 # -------------------------------
 # Page Configuration
@@ -68,6 +70,21 @@ def predict_batch(df):
         'probability': probas
     }), None
 
+def generate_scenarios(prompt, api_token, model="mistralai/Mistral-7B-Instruct-v0.1"):
+    """Call Hugging Face Inference API to generate text."""
+    API_URL = f"https://api-inference.huggingface.co/models/{model}"
+    headers = {"Authorization": f"Bearer {api_token}"}
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 300,
+            "temperature": 0.7,
+            "return_full_text": False
+        }
+    }
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
+
 # -------------------------------
 # Sidebar Navigation
 # -------------------------------
@@ -77,7 +94,7 @@ st.sidebar.markdown("---")
 
 app_mode = st.sidebar.radio(
     "Choose Mode",
-    ["🔍 Single Prediction", "📤 Batch Upload", "🎮 Scenario Simulator", "📊 Model Info"]
+    ["🔍 Single Prediction", "📤 Batch Upload", "🎮 Scenario Simulator", "📊 Model Info", "🤖 AI Scenario Generator"]
 )
 
 st.sidebar.markdown("---")
@@ -293,7 +310,7 @@ elif app_mode == "🎮 Scenario Simulator":
 # -------------------------------
 # Mode 4: Model Information
 # -------------------------------
-else:
+elif app_mode == "📊 Model Info":
     st.title("📊 Model Information")
     
     col1, col2 = st.columns(2)
@@ -327,3 +344,45 @@ else:
     - **Scenario Simulator**: Explore "what-if" scenarios
     - **All features must be provided** in the exact order shown in the sidebar
     """)
+
+# -------------------------------
+# Mode 5: AI Scenario Generator
+# -------------------------------
+elif app_mode == "🤖 AI Scenario Generator":
+    st.title("🤖 Generate Incident Scenarios with AI")
+    st.markdown("Use a free Hugging Face model to create plausible incident descriptions. Then you can manually enter them in other modes, or (optionally) parse and score them automatically.")
+    
+    # Try to get API token from secrets, else ask user
+    try:
+        HF_TOKEN = st.secrets["HF_TOKEN"]
+    except:
+        HF_TOKEN = st.text_input("Hugging Face API Token", type="password", help="Get a free token at huggingface.co/settings/tokens")
+    
+    if not HF_TOKEN:
+        st.warning("Please enter your Hugging Face API token to use this feature.")
+        st.stop()
+    
+    # Prompt input
+    default_prompt = "Generate 5 realistic IT security incidents with varying severity, downtime, and financial impact for a financial services company. Output as a bullet list."
+    user_prompt = st.text_area("Describe the kind of scenarios you want", value=default_prompt, height=150)
+    
+    if st.button("🚀 Generate Scenarios"):
+        with st.spinner("AI is thinking... (may take 10-30 seconds)"):
+            try:
+                result = generate_scenarios(user_prompt, HF_TOKEN)
+                # The API returns a list with generated text, or an error dict
+                if isinstance(result, list) and len(result) > 0:
+                    generated_text = result[0].get('generated_text', str(result))
+                elif isinstance(result, dict) and 'error' in result:
+                    st.error(f"API error: {result['error']}")
+                    st.stop()
+                else:
+                    generated_text = str(result)
+                
+                st.subheader("✨ Generated Scenarios")
+                st.write(generated_text)
+                
+                # Optional: add a button to parse into structured format (advanced)
+                # You can extend this by asking the AI to output CSV and then parsing.
+            except Exception as e:
+                st.error(f"Error calling API: {e}")
